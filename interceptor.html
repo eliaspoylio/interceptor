@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+        <head>
+                <title>interceptor</title>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+                <style>
+                        body {
+                                background:#000;
+                                color: #eee;
+                                padding:0;
+                                margin:0;
+                                font-weight:bold;
+                                overflow:hidden;
+                                font-family:Monospace;
+                                font-size:13px;
+                                text-align:center;
+                        }
+                        #info {
+                                position: absolute;
+                                top: 0px; width: 100%;
+                                padding: 5px;
+                                z-index:100;
+                        }
+                        a {
+                                color: #0080ff;
+                        }
+                        b { color:orange }
+                </style>
+
+                <script src = "/static/js/three.min.js"></script>
+
+
+        </head>
+
+        <body>
+
+
+                <script>
+
+                        var radius = 6371;
+
+                        var bullets = [];
+
+                        var quat = new THREE.Quaternion();
+                        var shootVelo = 10000;
+
+                        var MARGIN = 0;
+                        var SCREEN_HEIGHT = window.innerHeight - MARGIN * 2;
+                        var SCREEN_WIDTH  = window.innerWidth;
+                        var container, stats;
+                        var camera, controls, scene, renderer;
+                        var dirLight, pointLight, ambientLight;
+                        var composer;
+                        var textureLoader = new THREE.TextureLoader();
+                        var clock = new THREE.Clock();
+                        var sphere;
+                        init();
+                        animate();
+                        function init() {
+
+
+                                THREE.FlyControls = function ( object, domElement ) {
+
+                                        this.object = object;
+
+                                        this.domElement = ( domElement !== undefined ) ? domElement : document;
+                                        if ( domElement ) this.domElement.setAttribute( 'tabindex', - 1 );
+
+                                        // API
+
+                                        this.movementSpeed = 1.0;
+                                        this.rollSpeed = 0.005;
+
+                                        this.dragToLook = false;
+                                        this.autoForward = false;
+
+                                        // disable default target object behavior
+
+                                        // internals
+
+                                        this.tmpQuaternion = new THREE.Quaternion();
+
+                                        this.moveState = { up: 0, down: 0, left: 0, right: 0, forward: 0, back: 0, pitchUp: 0, pitchDown: 0, yawLeft: 0, yawRight: 0, rollLeft: 0, rollRight: 0 };
+                                        this.moveVector = new THREE.Vector3( 0, 0, 0 );
+                                        this.rotationVector = new THREE.Vector3( 0, 0, 0 );
+                                        this.gun = { canShoot:0, trig:0 };
+
+                                        this.handleEvent = function ( event ) {
+
+                                                if ( typeof this[ event.type ] == 'function' ) {
+
+                                                        this[ event.type ]( event );
+
+                                                }
+
+                                        };
+
+                                        this.keydown = function( event ) {
+
+                                                if ( event.altKey ) {
+
+                                                        return;
+
+                                                }
+
+                                                //event.preventDefault();
+
+                                                switch ( event.keyCode ) {
+
+                                                        case 16: /* shift */ this.movementSpeedMultiplier = .1; break;
+
+                                                        case 87: /*W*/ this.moveState.forward = 1; break;
+                                                        case 83: /*S*/ this.moveState.back = 1; break;
+
+                                                        case 82: /*R*/ this.moveState.up = 1; break;
+                                                        case 70: /*F*/ this.moveState.down = 1; break;
+
+                                                        case 38: /*up*/ this.moveState.pitchDown = 1; break;
+                                                        case 40: /*down*/ this.moveState.pitchUp = 1; break;
+
+                                                        case 37: /*left*/ this.moveState.yawLeft = 1; break;
+                                                        case 39: /*right*/ this.moveState.yawRight = 1; break;
+
+                                                        case 81: /*Q*/ this.moveState.rollLeft = 1; break;
+                                                        case 69: /*E*/ this.moveState.rollRight = 1; break;
+
+                                                        case 32: this.gun.trig=1; break;
+
+                                                }
+
+                                                this.updateMovementVector();
+                                                this.updateRotationVector();
+                                                this.shoot();
+
+                                        };
+
+                                        this.keyup = function( event ) {
+
+                                                switch ( event.keyCode ) {
+
+                                                        case 16: /* shift */ this.movementSpeedMultiplier = 1; break;
+
+                                                        case 87: /*W*/ this.moveState.forward = 0; break;
+                                                        case 83: /*S*/ this.moveState.back = 0; break;
+
+                                                        case 82: /*R*/ this.moveState.up = 0; break;
+                                                        case 70: /*F*/ this.moveState.down = 0; break;
+
+                                                        case 38: /*up*/ this.moveState.pitchDown = 0; break;
+                                                        case 40: /*down*/ this.moveState.pitchUp = 0; break;
+
+                                                        case 37: /*left*/ this.moveState.yawLeft = 0; break;
+                                                        case 39: /*right*/ this.moveState.yawRight = 0; break;
+
+                                                        case 81: /*Q*/ this.moveState.rollLeft = 0; break;
+                                                        case 69: /*E*/ this.moveState.rollRight = 0; break;
+
+                                                        case 32: this.gun.trig=0; break;
+
+
+                                                }
+
+                                                this.updateMovementVector();
+                                                this.updateRotationVector();
+                                                this.shoot();
+
+                                        };
+
+                                        this.update = function( delta ) {
+
+                                                var moveMult = delta * this.movementSpeed;
+                                                var rotMult = delta * this.rollSpeed;
+
+                                                this.object.translateX( this.moveVector.x * moveMult );
+                                                this.object.translateY( this.moveVector.y * moveMult );
+                                                this.object.translateZ( this.moveVector.z * moveMult );
+
+                                                this.tmpQuaternion.set( this.rotationVector.x * rotMult, this.rotationVector.y * rotMult, this.rotationVector.z * rotMult, 1 ).normalize();
+                                                this.object.quaternion.multiply( this.tmpQuaternion );
+
+                                                // expose the rotation vector for convenience
+                                                this.object.rotation.setFromQuaternion( this.object.quaternion, this.object.rotation.order );
+
+
+                                        };
+
+                                        this.updateMovementVector = function() {
+
+                                                var forward = ( this.moveState.forward || ( this.autoForward && ! this.moveState.back ) ) ? 1 : 0;
+
+                                                this.moveVector.x = ( - this.moveState.left    + this.moveState.right );
+                                                this.moveVector.y = ( - this.moveState.down    + this.moveState.up );
+                                                this.moveVector.z = ( - forward + this.moveState.back );
+
+                                                //console.log( 'move:', [ this.moveVector.x, this.moveVector.y, this.moveVector.z ] );
+
+                                        };
+
+                                        this.updateRotationVector = function() {
+
+                                                this.rotationVector.x = ( - this.moveState.pitchDown + this.moveState.pitchUp );
+                                                this.rotationVector.y = ( - this.moveState.yawRight  + this.moveState.yawLeft );
+                                                this.rotationVector.z = ( - this.moveState.rollRight + this.moveState.rollLeft );
+
+                                                //console.log( 'rotate:', [ this.rotationVector.x, this.rotationVector.y, this.rotationVector.z ] );
+
+                                        };
+
+
+                                        this.shoot = function() {
+
+                                                if(this.gun.trig == 1){ // spacebar key
+                                                                // creates a bullet as a Mesh object
+                                                                var bullet = new THREE.Mesh(
+                                                                        new THREE.SphereGeometry(radius/50,8,8),
+                                                                        new THREE.MeshBasicMaterial({color:0xff0000})
+                                                                );
+
+                                                                this.getDirection = function(targetVec){
+                                                                                targetVec.set(0,0,-1);
+                                                                                quat.multiplyVector3(targetVec);
+                                                                }
+
+                                                                var shootDirection = new THREE.Vector3();
+                                                                getShootDir(shootDirection);
+
+                                                                bullet.position.set(camera.position.x, camera.position.y, camera.position.z );
+
+                                                                function getShootDir(targetVec){
+                                                                                var vector = targetVec;
+                                                                                targetVec.set(0,0,1);
+                                                                                vector.unproject(camera);
+                                                                                var ray = new THREE.Ray(bullet.position, vector.sub(bullet.position).normalize() );
+                                                                                targetVec.copy(ray.direction);
+                                                                }
+
+
+                                                                bullet.velocity = new THREE.Vector3(
+                                                                        shootDirection.x* shootVelo,
+                                                                        shootDirection.y* shootVelo,
+                                                                        shootDirection.z* shootVelo
+                                                                );
+
+                                                                bullet.alive = true;
+                                                                setTimeout(function(){
+                                                                        bullet.alive = false;
+                                                                        scene.remove(bullet);
+                                                                }, 1000);
+
+                                                                bullets.push(bullet);
+                                                                scene.add(bullet);
+
+                                                        }
+                                        };
+
+
+                                        this.getContainerDimensions = function() {
+
+                                                if ( this.domElement != document ) {
+
+                                                        return {
+                                                                size    : [ this.domElement.offsetWidth, this.domElement.offsetHeight ],
+                                                                offset  : [ this.domElement.offsetLeft,  this.domElement.offsetTop ]
+                                                        };
+
+                                                } else {
+
+                                                        return {
+                                                                size    : [ window.innerWidth, window.innerHeight ],
+                                                                offset  : [ 0, 0 ]
+                                                        };
+
+                                                }
+
+                                        };
+
+                                        function bind( scope, fn ) {
+
+                                                return function () {
+
+                                                        fn.apply( scope, arguments );
+
+                                                };
+
+                                        }
+
+                                        function contextmenu( event ) {
+
+                                                event.preventDefault();
+
+                                        }
+
+                                        this.dispose = function() {
+
+                                                this.domElement.removeEventListener( 'contextmenu', contextmenu, false );
+
+                                                window.removeEventListener( 'keydown', _keydown, false );
+                                                window.removeEventListener( 'keyup', _keyup, false );
+
+                                        };
+
+                                        var _keydown = bind( this, this.keydown );
+                                        var _keyup = bind( this, this.keyup );
+
+                                        this.domElement.addEventListener( 'contextmenu', contextmenu, false );
+
+
+                                        window.addEventListener( 'keydown', _keydown, false );
+                                        window.addEventListener( 'keyup',   _keyup, false );
+
+                                        this.updateMovementVector();
+                                        this.updateRotationVector();
+
+                                };
+
+
+                                container = document.createElement( 'div' );
+                                document.body.appendChild( container );
+                                camera = new THREE.PerspectiveCamera( 25, SCREEN_WIDTH / SCREEN_HEIGHT, 50, 1e7 );
+                                camera.position.z = radius * 5;
+                                scene = new THREE.Scene();
+                                scene.fog = new THREE.FogExp2( 0x000000, 0.00000025 );
+                                controls = new THREE.FlyControls( camera );
+                                controls.movementSpeed = 100000;
+                                controls.domElement = container;
+                                controls.rollSpeed = Math.PI / 24;
+                                controls.autoForward = false;
+                                controls.dragToLook = false;
+                                dirLight = new THREE.DirectionalLight( 0xffffff );
+                                dirLight.position.set( -1, 0, 1 ).normalize();
+                                scene.add( dirLight );
+
+
+                                //sphere
+                                var geometry = new THREE.SphereGeometry( radius/3, 8, 8 );
+                                var material = new THREE.MeshBasicMaterial( {color: 0xffffff, wireframe: true} );
+                                var sphere0 = new THREE.Mesh( geometry, material );
+                                sphere0.position.set( radius * 0.5, radius * -0.9, radius * -150);
+                                var sphere1 = new THREE.Mesh( geometry, material );
+                                sphere1.position.set( radius * -1, radius * -0.9, radius * -110);
+                                var sphere2 = new THREE.Mesh( geometry, material );
+                                sphere2.position.set( radius * 2, radius * 4, radius * -200);
+                                var sphere3 = new THREE.Mesh( geometry, material );
+                                sphere3.position.set( radius * 0.5, radius * -0.9, radius * -250);
+                                var sphere4 = new THREE.Mesh( geometry, material );
+                                sphere4.position.set( radius * -1, radius * -0.9, radius * -310);
+                                var sphere5 = new THREE.Mesh( geometry, material );
+                                sphere5.position.set( radius * -2, radius * -8, radius * -380);
+
+
+                                var time = Date.now() * 0.0005;
+                                sphere0.position.x = Math.sin( time * 0.7 ) * 30*radius;
+                                sphere0.position.y = Math.cos( time * 0.5 ) * 40*radius;
+                                sphere0.position.z = Math.cos( time * 0.3 ) * 30*radius;
+                                scene.add( sphere0, sphere1, sphere2, sphere3, sphere4, sphere5);
+
+                                // stars
+                                var i, r = radius, starsGeometry = [ new THREE.Geometry(), new THREE.Geometry() ];
+                                for ( i = 0; i < 250; i ++ ) {
+                                        var vertex = new THREE.Vector3();
+                                        vertex.x = Math.random() * 2 - 1;
+                                        vertex.y = Math.random() * 2 - 1;
+                                        vertex.z = Math.random() * 2 - 1;
+                                        vertex.multiplyScalar( r );
+                                        starsGeometry[ 0 ].vertices.push( vertex );
+                                }
+                                for ( i = 0; i < 1500; i ++ ) {
+                                        var vertex = new THREE.Vector3();
+                                        vertex.x = Math.random() * 2 - 1;
+                                        vertex.y = Math.random() * 2 - 1;
+                                        vertex.z = Math.random() * 2 - 1;
+                                        vertex.multiplyScalar( r );
+                                        starsGeometry[ 1 ].vertices.push( vertex );
+                                }
+                                var stars;
+                                var starsMaterials = [
+                                        new THREE.PointsMaterial( { color: 0x555555, size: 2, sizeAttenuation: false } ),
+                                        new THREE.PointsMaterial( { color: 0x555555, size: 1, sizeAttenuation: false } ),
+                                        new THREE.PointsMaterial( { color: 0x333333, size: 2, sizeAttenuation: false } ),
+                                        new THREE.PointsMaterial( { color: 0x3a3a3a, size: 1, sizeAttenuation: false } ),
+                                        new THREE.PointsMaterial( { color: 0x1a1a1a, size: 2, sizeAttenuation: false } ),
+                                        new THREE.PointsMaterial( { color: 0x1a1a1a, size: 1, sizeAttenuation: false } )
+                                ];
+                                for ( i = 10; i < 30; i ++ ) {
+                                        stars = new THREE.Points( starsGeometry[ i % 2 ], starsMaterials[ i % 6 ] );
+                                        stars.rotation.x = Math.random() * 6;
+                                        stars.rotation.y = Math.random() * 6;
+                                        stars.rotation.z = Math.random() * 6;
+                                        stars.scale.setScalar( i * 50 );
+                                        stars.matrixAutoUpdate = false;
+                                        stars.updateMatrix();
+                                        scene.add( stars );
+                                }
+
+                                renderer = new THREE.WebGLRenderer();
+                                renderer.setPixelRatio( window.devicePixelRatio );
+                                renderer.setSize( SCREEN_WIDTH, SCREEN_HEIGHT );
+                                container.appendChild( renderer.domElement );
+
+                                window.addEventListener( 'resize', onWindowResize, false );
+
+                                renderer.render(scene, camera);
+                        }
+                        function onWindowResize( event ) {
+                                SCREEN_HEIGHT = window.innerHeight;
+                                SCREEN_WIDTH  = window.innerWidth;
+                                renderer.setSize( SCREEN_WIDTH, SCREEN_HEIGHT );
+                                camera.aspect = SCREEN_WIDTH / SCREEN_HEIGHT;
+                                camera.updateProjectionMatrix();
+                                composer.reset();
+                        }
+                        function animate() {
+                                requestAnimationFrame( animate );
+                                render();
+                        }
+                        function render() {
+
+                                var delta = clock.getDelta();
+
+                                controls.update( delta );
+                                renderer.render(scene, camera)
+
+                                for(var index=0; index<bullets.length; index+=1){
+                                        if( [index] === undefined ) continue;
+                                        if( bullets[index].alive == false ){
+                                                bullets.splice(index,1);
+                                                continue;
+                                        }
+
+                                bullets[index].position.add(bullets[index].velocity);
+                                }
+
+
+                        }
+
+                </script>
+        </body>
+</html>
